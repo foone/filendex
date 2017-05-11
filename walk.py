@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import os, sys, stat, hashlib, subprocess, sqlite3
 
+DATABASE_PATH = 'filendex.sqlite3'
 BUFFER_SIZE = 1024*1024 # TODO: configure on command line?
 HASHERS='md5 sha1 sha256'.split()
 
@@ -46,8 +47,16 @@ for algo in HASHERS:
 
 basepath = os.path.abspath(sys.argv[1])
 
-conn = sqlite3.connect('filendex.sqlite3')
+conn = sqlite3.connect(DATABASE_PATH)
 conn.text_factory = str # linux filesystem encoding is a mess. we'll handle it later, in the GUI
+with conn as cur:
+	try:
+		cur.execute('select path from files limit 1')
+	except sqlite3.OperationalError:
+		with open('create.sql','rb') as f:
+			cur.executescript(f.read())
+
+
 
 for dirpath, dirnames, filenames in os.walk(basepath):
 	for filename in filenames:
