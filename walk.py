@@ -4,7 +4,7 @@ import os, sys, stat, hashlib, subprocess, sqlite3
 DATABASE_PATH = 'filendex.sqlite3'
 BUFFER_SIZE = 1024*1024 # TODO: configure on command line?
 HASHERS='md5 sha1 sha256'.split()
-ARCHIVE_EXTS = 'zip iso'.split()
+ARCHIVE_EXTS = 'zip iso cab'.split()
 MAXDEPTH = 100
 
 EMPTYFILE={}
@@ -71,9 +71,18 @@ def is_archive(row):
 def handle_archive(fileid, path, dirnum):
 	target_dir = os.path.join('temp', '{:04}'.format(dirnum))
 	os.mkdir(target_dir)
-	subprocess.check_call(['unar', '-o', target_dir, '-D', '-q', path])
+	try:
+		subprocess.check_call(['unar', '-r', '-o', target_dir, '-D', '-q', path])
+	except subprocess.CalledProcessError:
+		# handle error (log somewhere? database?)
+		# check that there are files (since the error might be a warning?)
+		pass # Continue and process whatever we managed to extract
 
-	scan_directory(target_dir, dirnum, fileid)
+	try:
+		scan_directory(target_dir, dirnum, fileid)
+	finally:
+		subprocess.check_call(['rm', '-rf', target_dir])
+
 
 def scan_directory(top_path, dirnum=0, inside=None):
 	for dirpath, dirnames, filenames in os.walk(top_path):
