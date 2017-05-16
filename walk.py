@@ -4,13 +4,29 @@ import os, sys, stat, hashlib, subprocess, sqlite3
 DATABASE_PATH = 'filendex.sqlite3'
 BUFFER_SIZE = 1024*1024 # TODO: configure on command line?
 HASHERS='md5 sha1 sha256'.split()
-ARCHIVE_EXTS = 'zip iso cab'.split()
+ARCHIVE_EXTS = """zip iso cab msi bin mdf rar 7z
+tar tar.gz tar.bz2 tar.lzma arj arc pak zoo ace lzh sit
+lha""".split()
+IMAGE_EXTS = """bmp cur dcm gif ico jng jbig jbg jpeg jpg jpe
+mng pbm pcx pgm pix pict png pnm ppm psd svg tga tiff tif wmf
+xbm xpm""".split()
+THUMBNAIL_SIZE = 200
 MAXDEPTH = 100
 
 EMPTYFILE={}
 for algo in HASHERS:
 	EMPTYFILE[algo] = hashlib.new(algo).hexdigest()
 
+def thumbnailify(path, hash256):
+	thumb_path = os.path.join('thumbs', '{}.jpeg'.format(hash256))
+
+	subprocess.Popen([
+		'convert', '-define',
+		'jpeg:size={}x{}'.format(THUMBNAIL_SIZE*2, THUMBNAIL_SIZE*2),
+		path + '[0]',
+		'-thumbnail','{}x{}'.format(THUMBNAIL_SIZE, THUMBNAIL_SIZE),
+		thumb_path,
+	]).wait()
 
 def get_file_type(path):
 	try:
@@ -63,10 +79,10 @@ def setup_database():
 	return conn
 
 def is_archive(row):
-	if row['ext'] in ARCHIVE_EXTS:
-		return True
-	# TODO: check ISO
-	return False
+	return row['ext'] in ARCHIVE_EXTS
+
+def is_image(row):
+	return row['ext'] in IMAGE_EXTS
 
 def handle_archive(fileid, path, dirnum):
 	target_dir = os.path.join('temp', '{:04}'.format(dirnum))
@@ -121,6 +137,9 @@ def scan_directory(top_path, dirnum=0, inside=None):
 			except:
 				print row
 				raise
+
+			if is_image(row):
+				thumbnailify(path, row['hash_sha256'])
 
 			if is_archive(row):
 				if dirnum+1 == MAXDEPTH:
